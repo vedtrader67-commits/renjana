@@ -1,6 +1,13 @@
 package com.fesu.renjana.ui
 
 import androidx.compose.animation.*
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
@@ -143,6 +150,51 @@ fun RenjanaApp(
                     instances.map { it.packageName }.toSet()
                 }
                 val coroutineScope = rememberCoroutineScope()
+                val context = LocalContext.current
+                val apkPicker = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocument()
+                ) { uri: Uri? ->
+                    if (uri != null) {
+                        coroutineScope.launch {
+                            try {
+                                val imported = withContext(Dispatchers.IO) {
+                                    val target = File(context.cacheDir, "apk_import_${System.currentTimeMillis()}.apk")
+                                    context.contentResolver.openInputStream(uri)?.use { input ->
+                                        target.outputStream().use { output -> input.copyTo(output) }
+                                    } ?: throw IllegalStateException("Could not read selected APK")
+                                    target
+                                }
+                                val appInfo = withContext(Dispatchers.IO) {
+                                    com.fesu.renjana.core.AppManager(context).extractAppInfo(imported.absolutePath)
+                                } ?: throw IllegalArgumentException("This file is not a readable APK")
+                                if (targetInstanceId != null) {
+                                    val manager = com.fesu.renjana.RenjanaApplication.get().instanceManager
+                                    val result = manager.addAppToInstance(
+                                        instanceId = targetInstanceId,
+                                        packageName = appInfo.packageName,
+                                        appName = appInfo.appName,
+                                        versionName = appInfo.versionName,
+                                        versionCode = appInfo.versionCode,
+                                        apkPath = imported.absolutePath
+                                    )
+                                    result.fold(
+                                        onSuccess = {
+                                            imported.delete()
+                                            navController.popBackStack()
+                                        },
+                                        onFailure = { e ->
+                                            android.widget.Toast.makeText(context, e.message ?: "APK import failed", android.widget.Toast.LENGTH_LONG).show()
+                                        }
+                                    )
+                                } else {
+                                    createSheetApp = Pair(appInfo.packageName, imported.absolutePath)
+                                }
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, e.message ?: "Could not import APK", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                }
 
                 var showDuplicateDialog by remember { mutableStateOf(false) }
                 var createSheetApp by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -209,6 +261,7 @@ fun RenjanaApp(
                         }
                     },
                     clonedPackageNames = clonedPackageNames,
+                    onImportApk = { apkPicker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream", "*/*")) },
                     onNavigateBack = if (targetInstanceId != null) {
                         { navController.popBackStack() }
                     } else null
