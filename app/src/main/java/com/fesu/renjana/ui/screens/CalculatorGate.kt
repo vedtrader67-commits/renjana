@@ -60,14 +60,6 @@ private fun calculate(raw: String): String? {
     return try {
         val tokens = Regex("(?<=[+*/%()\\-])|(?=[+*/%()\\-])").split(raw).filter { it.isNotBlank() }.toMutableList()
         var index = 0
-        fun expression(): Double {
-            var value = term()
-            while (index < tokens.size && (tokens[index] == "+" || tokens[index] == "-")) {
-                val op = tokens[index++]; val rhs = term(); value = if (op == "+") value + rhs else value - rhs
-            }
-            return value
-        }
-        fun termPlaceholder(): Double = 0.0
         // Small recursive-descent parser with standard operator precedence.
         lateinit var parseExpr: () -> Double
         lateinit var parseTerm: () -> Double
