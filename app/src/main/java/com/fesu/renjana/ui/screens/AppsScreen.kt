@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
@@ -47,7 +48,8 @@ fun AppsScreen(
     viewModel: AppsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onSelectApp: (AppInfo) -> Unit = {},
     clonedPackageNames: Set<String> = emptySet(),
-    onNavigateBack: (() -> Unit)? = null
+    onNavigateBack: (() -> Unit)? = null,
+    onImportApk: (() -> Unit)? = null
 ) {
     if (onNavigateBack != null) {
         BackHandler { onNavigateBack.invoke() }
@@ -103,6 +105,24 @@ fun AppsScreen(
             .fillMaxSize()
             .padding(innerPadding)
     ) {
+        if (onImportApk != null) {
+            Button(
+                onClick = onImportApk,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Install APK into virtual space")
+            }
+            Text(
+                "APK files are copied into Calculator's private storage.",
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
         // Search
         OutlinedTextField(
             value = searchQuery,
@@ -152,7 +172,7 @@ fun AppsScreen(
                         if (searchQuery.isBlank()) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Install apps on your device, then create an instance.",
+                                text = "Choose an APK file to add an app to your virtual space.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
