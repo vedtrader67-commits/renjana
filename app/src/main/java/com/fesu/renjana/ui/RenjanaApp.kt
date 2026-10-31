@@ -151,6 +151,9 @@ fun RenjanaApp(
                 }
                 val coroutineScope = rememberCoroutineScope()
                 val context = LocalContext.current
+                var showDuplicateDialog by remember { mutableStateOf(false) }
+                var createSheetApp by remember { mutableStateOf<Pair<String, String>?>(null) }
+
                 val apkPicker = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.OpenDocument()
                 ) { uri: Uri? ->
@@ -195,9 +198,6 @@ fun RenjanaApp(
                         }
                     }
                 }
-
-                var showDuplicateDialog by remember { mutableStateOf(false) }
-                var createSheetApp by remember { mutableStateOf<Pair<String, String>?>(null) }
 
                 if (showDuplicateDialog) {
                     AlertDialog(
