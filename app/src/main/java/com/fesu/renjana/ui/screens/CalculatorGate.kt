@@ -1,5 +1,6 @@
 package com.fesu.renjana.ui.screens
 
+import androidx.compose.material3.Text
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
