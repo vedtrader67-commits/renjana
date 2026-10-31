@@ -79,12 +79,9 @@ fun CalculatorGate(onUnlocked: () -> Unit) {
                                 display = input
                             }
                             "=" -> {
-                                if (input == "6767") onUnlocked()
-                                else {
-                                    val result = calculate(input)
-                                    if (result != null) { display = result; input = result }
-                                    else if (input.isNotBlank()) { display = "Error"; input = "" }
-                                }
+                                val result = calculate(input)
+                                if (result != null) { display = result; input = result }
+                                else if (input.isNotBlank()) { display = "Error"; input = "" }
                             }
                             else -> {
                                 input += when (key) { "×" -> "*"; "÷" -> "/"; "−" -> "-"; else -> key }
