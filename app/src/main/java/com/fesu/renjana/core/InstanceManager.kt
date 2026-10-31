@@ -25,6 +25,33 @@ class InstanceManager(
         private const val TAG = "InstanceManager"
     }
 
+    /**
+     * Store a private APK copy inside the instance. Android deletes sourceDir
+     * when the original installed app is uninstalled.
+     */
+    private fun copyApkIntoInstance(sourcePath: String, packageName: String, instanceDir: File): File {
+        val source = File(sourcePath)
+        require(source.isFile) { "The selected APK no longer exists: $sourcePath" }
+        val apkDir = File(instanceDir, "apks").apply { mkdirs() }
+        val baseCopy = File(apkDir, "base.apk")
+        source.copyTo(baseCopy, overwrite = true)
+        // Preserve split APK files beside base.apk. Split-aware guest loading is still
+        // required for apps that depend on resources or code in those split files.
+        try {
+            val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
+            appInfo.splitSourceDirs.orEmpty().forEachIndexed { index, splitPath ->
+                val split = File(splitPath)
+                if (split.isFile) {
+                    val name = split.name.takeIf { it.endsWith(".apk", ignoreCase = true) } ?: "split_$index.apk"
+                    split.copyTo(File(apkDir, name), overwrite = true)
+                }
+            }
+        } catch (_: Exception) {
+            RenjanaLog.w(TAG, "Could not copy installed split APKs for $packageName")
+        }
+        return baseCopy
+    }
+
     fun getAllInstances(): Flow<List<Instance>> {
         return instanceDao.getAllInstances().map { entities ->
             entities.map { entityToInstance(it) }
@@ -60,13 +87,14 @@ class InstanceManager(
                     File(baseDir, dir).mkdirs()
                 }
 
+                val storedApk = copyApkIntoInstance(apkPath, packageName, baseDir)
                 val dataPath = baseDir.absolutePath
                 val now = System.currentTimeMillis()
 
                 val instance = Instance(
                     id = id, packageName = packageName, appName = appName,
                     versionName = versionName, versionCode = versionCode,
-                    apkPath = apkPath, iconPath = null, accountId = accountId,
+                    apkPath = storedApk.absolutePath, iconPath = null, accountId = accountId,
                     dataPath = dataPath, createdAt = now, lastUsed = now,
                     isActive = false, config = config
                 )
@@ -78,7 +106,7 @@ class InstanceManager(
                                 instanceId = id,
                                 packageName = packageName,
                                 appName = appName,
-                                apkPath = apkPath,
+                                apkPath = storedApk.absolutePath,
                                 versionName = versionName,
                                 versionCode = versionCode,
                                 addedAt = now
@@ -353,20 +381,26 @@ class InstanceManager(
         iconPath: String? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            instanceAppDao.insertApp(
-                InstanceAppEntity(
-                    instanceId = instanceId,
-                    packageName = packageName,
-                    appName = appName,
-                    versionName = versionName,
-                    versionCode = versionCode,
-                    apkPath = apkPath,
-                    iconPath = iconPath,
-                    addedAt = System.currentTimeMillis()
+            val instance = instanceDao.getInstanceById(instanceId)
+                ?: throw IllegalArgumentException("Instance not found: $instanceId")
+            // createInstance may already have inserted the first app row.
+            val existing = instanceAppDao.getApp(instanceId, packageName)
+            if (existing == null) {
+                val privateApk = copyApkIntoInstance(apkPath, packageName, File(instance.dataPath))
+                instanceAppDao.insertApp(
+                    InstanceAppEntity(
+                        instanceId = instanceId,
+                        packageName = packageName,
+                        appName = appName,
+                        versionName = versionName,
+                        versionCode = versionCode,
+                        apkPath = privateApk.absolutePath,
+                        iconPath = iconPath,
+                        addedAt = System.currentTimeMillis()
+                    )
                 )
-            )
+            }
             // Create per-app subdirectory within instance dataPath
-            val instance = instanceDao.getInstanceById(instanceId) ?: return@runCatching
             val appDir = java.io.File(instance.dataPath, packageName)
             listOf("files", "databases", "shared_prefs", "cache", "code_cache", "dex_opt")
                 .forEach { java.io.File(appDir, it).mkdirs() }
