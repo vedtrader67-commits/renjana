@@ -130,27 +130,15 @@ class InstanceLauncher(private val context: Context) {
                 // Strategy 1: StubActivity path (WITH isolation) — DEFAULT
                 val launched = tryStubLaunch(launchData)
 
-                if (launched) {
-                    RenjanaLog.i(TAG, "StubActivity launch succeeded for ${launchData.packageName}")
-                } else {
-                    // Strategy 2: Fallback — direct intent launch (NO isolation)
-                    RenjanaLog.w(TAG, "StubActivity launch unavailable, falling back to direct launch (no isolation)")
-                    val fallbackLaunched = tryDirectLaunch(launchData.packageName)
-                    if (fallbackLaunched) {
-                        RenjanaLog.i(TAG, "Direct launch succeeded for ${launchData.packageName} (no isolation)")
-                        CoroutineScope(Dispatchers.IO).launch {
-                            try {
-                                instanceManager.updateInstanceUsage(instanceId, System.currentTimeMillis(), true)
-                            } catch (e: Exception) {
-                                RenjanaLog.e(TAG, "Failed to update usage: ${e.message}")
-                            }
-                        }
-                        return@withContext LaunchResult.FallbackNoIsolation("Pine unavailable — running without isolation")
-                    } else {
-                        RenjanaLog.e(TAG, "All launch strategies failed for ${launchData.packageName}")
-                        return@withContext LaunchResult.Failure("All launch strategies failed for ${launchData.packageName}")
-                    }
+                if (!launched) {
+                    // Never fall back to Android's PackageManager. The guest APK must
+                    // run through the private virtual runtime, not the host installation.
+                    RenjanaLog.e(TAG, "Virtual launch failed for ${launchData.packageName}; host launch is intentionally disabled")
+                    return@withContext LaunchResult.Failure(
+                        "Virtual launch failed. The APK remains inside Calculator; the phone's installed app was not opened."
+                    )
                 }
+                RenjanaLog.i(TAG, "Virtual StubActivity launch succeeded for ${launchData.packageName}")
 
                 // Update lastUsed in background
                 CoroutineScope(Dispatchers.IO).launch {
